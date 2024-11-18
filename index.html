@@ -48,6 +48,7 @@
             padding: 5px;
             width: 90%;
             box-sizing: border-box;
+            font-size: 16px;
         }
         .setting-item {
             margin: 10px 0;
@@ -56,7 +57,7 @@
             border-radius: 5px;
         }
         button {
-            padding: 10px 20px;
+            padding: 15px 30px;
             font-size: 1.1em;
             cursor: pointer;
             background-color: #4CAF50;
@@ -73,6 +74,11 @@
             display: block;
             margin-top: 5px;
         }
+        #debug {
+            color: #666;
+            font-size: 0.8em;
+            margin-top: 10px;
+        }
         @media (max-width: 768px) {
             .container {
                 width: 95%;
@@ -82,11 +88,9 @@
             .time-display {
                 font-size: 2em;
             }
-            select, input, textarea {
-                font-size: 16px;
-            }
             button {
-                padding: 15px 30px;
+                width: 100%;
+                margin: 5px 0;
             }
         }
     </style>
@@ -94,14 +98,15 @@
 <body>
     <div class="container">
         <h1>语音时钟</h1>
-        <div id="currentTime" class="time-display"></div>
+        <div id="currentTime" class="time-display">加载中...</div>
+        <div id="debug"></div>
         <button onclick="toggleVoice()" id="toggleButton">开启语音</button>
         
         <div class="settings">
             <div class="setting-item">
                 <label>系统语音选择：</label>
                 <select id="systemVoiceSelect" onchange="updateSettings()">
-                    <!-- 可用的系统语音会在这里显示 -->
+                    <option value="">加载中...</option>
                 </select>
                 <small>建议选择中文语音以获得最佳效果</small>
             </div>
@@ -142,6 +147,13 @@
         </div>
     </div>
         <script>
+        // 添加调试信息
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            const debug = document.getElementById('debug');
+            debug.textContent = 'Error: ' + msg + '\nLine: ' + lineNo;
+            return false;
+        };
+
         let isVoiceEnabled = false;
         let speechSynth = window.speechSynthesis;
         let lastSpokenTime = '';
@@ -153,6 +165,13 @@
             hourlyTemplate: '现在是{time}整',
             voiceURI: ''
         };
+
+        // 检查语音支持
+        if ('speechSynthesis' in window) {
+            document.getElementById('debug').textContent = '语音支持正常';
+        } else {
+            document.getElementById('debug').textContent = '不支持语音功能';
+        }
 
         // 数字转中文
         function numberToChinese(num) {
@@ -185,30 +204,36 @@
 
         // 更新系统语音列表
         function updateVoiceList() {
-            let voices = speechSynth.getVoices();
-            let voiceSelect = document.getElementById('systemVoiceSelect');
-            voiceSelect.innerHTML = '';
-            
-            voices.forEach(voice => {
-                let option = document.createElement('option');
-                option.value = voice.voiceURI;
-                option.textContent = `${voice.name} (${voice.lang})`;
-                if (voice.lang.includes('zh')) {
-                    option.textContent += ' - 中文';
-                }
-                voiceSelect.appendChild(option);
-            });
+            try {
+                let voices = speechSynth.getVoices();
+                let voiceSelect = document.getElementById('systemVoiceSelect');
+                voiceSelect.innerHTML = '';
+                
+                voices.forEach(voice => {
+                    let option = document.createElement('option');
+                    option.value = voice.voiceURI;
+                    option.textContent = `${voice.name} (${voice.lang})`;
+                    if (voice.lang.includes('zh')) {
+                        option.textContent += ' - 中文';
+                    }
+                    voiceSelect.appendChild(option);
+                });
 
-            // 选择之前保存的语音或默认中文语音
-            if (settings.voiceURI) {
-                voiceSelect.value = settings.voiceURI;
-            } else {
-                // 默认选择中文语音
-                let chineseVoice = voices.find(voice => voice.lang.includes('zh'));
-                if (chineseVoice) {
-                    voiceSelect.value = chineseVoice.voiceURI;
-                    settings.voiceURI = chineseVoice.voiceURI;
+                // 选择之前保存的语音或默认中文语音
+                if (settings.voiceURI) {
+                    voiceSelect.value = settings.voiceURI;
+                } else {
+                    // 默认选择中文语音
+                    let chineseVoice = voices.find(voice => voice.lang.includes('zh'));
+                    if (chineseVoice) {
+                        voiceSelect.value = chineseVoice.voiceURI;
+                        settings.voiceURI = chineseVoice.voiceURI;
+                    }
                 }
+                
+                document.getElementById('debug').textContent = '找到 ' + voices.length + ' 个语音';
+            } catch (error) {
+                document.getElementById('debug').textContent = '更新语音列表出错: ' + error.message;
             }
         }
 
@@ -221,7 +246,7 @@
             }
             return voices.find(voice => voice.lang.includes('zh')) || voices[0];
         }
-                  // 加载设置
+                    // 加载设置
         function loadSettings() {
             const savedSettings = localStorage.getItem('voiceClockSettings');
             if (savedSettings) {
@@ -264,18 +289,22 @@
             const timeForSpeech = formatTimeForSpeech(now);
             if (timeForSpeech === lastSpokenTime) return;
             
-            let utterance = new SpeechSynthesisUtterance();
-            const template = minutes === 0 ? settings.hourlyTemplate : settings.normalTemplate;
-            utterance.text = template.replace('{time}', timeForSpeech);
-            
-            let voices = speechSynth.getVoices();
-            let selectedVoice = voices.find(voice => voice.voiceURI === settings.voiceURI);
-            utterance.voice = selectedVoice || getChineseVoice();
-            utterance.rate = settings.rate;
-            utterance.volume = settings.volume;
-            
-            speechSynth.speak(utterance);
-            lastSpokenTime = timeForSpeech;
+            try {
+                let utterance = new SpeechSynthesisUtterance();
+                const template = minutes === 0 ? settings.hourlyTemplate : settings.normalTemplate;
+                utterance.text = template.replace('{time}', timeForSpeech);
+                
+                let voices = speechSynth.getVoices();
+                let selectedVoice = voices.find(voice => voice.voiceURI === settings.voiceURI);
+                utterance.voice = selectedVoice || getChineseVoice();
+                utterance.rate = settings.rate;
+                utterance.volume = settings.volume;
+                
+                speechSynth.speak(utterance);
+                lastSpokenTime = timeForSpeech;
+            } catch (error) {
+                document.getElementById('debug').textContent = '播报出错: ' + error.message;
+            }
         }
 
         // 切换语音开关
@@ -303,9 +332,13 @@
         }
 
         // 初始化
-        speechSynth.addEventListener('voiceschanged', () => {
+        if (speechSynth.getVoices().length === 0) {
+            speechSynth.addEventListener('voiceschanged', function() {
+                updateVoiceList();
+            });
+        } else {
             updateVoiceList();
-        });
+        }
 
         setInterval(updateTime, 1000);
         updateTime();
