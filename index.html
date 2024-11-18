@@ -10,8 +10,6 @@
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕐</text></svg>">
     <!-- 移动端状态栏颜色 -->
     <meta name="theme-color" content="#4CAF50">
-    <!-- 禁用缩放 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,6 +19,8 @@
             min-height: 100vh;
             margin: 0;
             background-color: #f0f0f0;
+            padding: 10px;
+            box-sizing: border-box;
         }
         .container {
             text-align: center;
@@ -29,7 +29,8 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             max-width: 500px;
-            width: 90%;
+            width: 100%;
+            box-sizing: border-box;
         }
         .settings {
             margin-top: 20px;
@@ -44,14 +45,16 @@
             color: #333;
         }
         select, input, textarea {
-            margin: 5px;
-            padding: 5px;
-            width: 90%;
+            margin: 5px 0;
+            padding: 8px;
+            width: 100%;
             box-sizing: border-box;
             font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
         .setting-item {
-            margin: 10px 0;
+            margin: 15px 0;
             padding: 10px;
             background: #f9f9f9;
             border-radius: 5px;
@@ -65,9 +68,15 @@
             border: none;
             border-radius: 5px;
             transition: background-color 0.3s;
+            width: 100%;
+            margin: 10px 0;
         }
         button:hover {
             background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
         }
         small {
             color: #666;
@@ -78,19 +87,20 @@
             color: #666;
             font-size: 0.8em;
             margin-top: 10px;
+            padding: 5px;
+            background-color: #f5f5f5;
+            border-radius: 3px;
         }
         @media (max-width: 768px) {
+            body {
+                padding: 0;
+            }
             .container {
-                width: 95%;
-                padding: 10px;
-                margin: 10px;
+                border-radius: 0;
+                min-height: 100vh;
             }
             .time-display {
                 font-size: 2em;
-            }
-            button {
-                width: 100%;
-                margin: 5px 0;
             }
         }
     </style>
@@ -108,7 +118,7 @@
                 <select id="systemVoiceSelect" onchange="updateSettings()">
                     <option value="">加载中...</option>
                 </select>
-                <small>建议选择中文语音以获得最佳效果</small>
+                <small>建议使用Chrome浏览器获得最佳语音效果</small>
             </div>
 
             <div class="setting-item">
@@ -147,7 +157,7 @@
         </div>
     </div>
         <script>
-                // 添加调试信息
+        // 添加调试信息
         window.onerror = function(msg, url, lineNo, columnNo, error) {
             const debug = document.getElementById('debug');
             debug.textContent = 'Error: ' + msg + '\nLine: ' + lineNo;
@@ -157,6 +167,14 @@
         let isVoiceEnabled = false;
         let speechSynth = null;
         let lastSpokenTime = '';
+        let settings = {
+            interval: 0,
+            rate: 1.0,
+            volume: 1.0,
+            normalTemplate: '现在时间是{time}',
+            hourlyTemplate: '现在是{time}整',
+            voiceURI: ''
+        };
 
         // 检查浏览器支持
         function checkBrowserSupport() {
@@ -190,21 +208,6 @@
                 }
             }, 100);
         }
-        let settings = {
-            interval: 0,
-            rate: 1.0,
-            volume: 1.0,
-            normalTemplate: '现在时间是{time}',
-            hourlyTemplate: '现在是{time}整',
-            voiceURI: ''
-        };
-
-        // 检查语音支持
-        if ('speechSynthesis' in window) {
-            document.getElementById('debug').textContent = '语音支持正常';
-        } else {
-            document.getElementById('debug').textContent = '不支持语音功能';
-        }
 
         // 数字转中文
         function numberToChinese(num) {
@@ -234,8 +237,7 @@
             }
             return result;
         }
-
-        // 更新系统语音列表
+                    // 更新系统语音列表
         function updateVoiceList() {
             try {
                 let voices = speechSynth.getVoices();
@@ -263,8 +265,6 @@
                         settings.voiceURI = chineseVoice.voiceURI;
                     }
                 }
-                
-                document.getElementById('debug').textContent = '找到 ' + voices.length + ' 个语音';
             } catch (error) {
                 document.getElementById('debug').textContent = '更新语音列表出错: ' + error.message;
             }
@@ -279,7 +279,8 @@
             }
             return voices.find(voice => voice.lang.includes('zh')) || voices[0];
         }
-                    // 加载设置
+
+        // 加载设置
         function loadSettings() {
             const savedSettings = localStorage.getItem('voiceClockSettings');
             if (savedSettings) {
@@ -312,7 +313,7 @@
 
         // 播报时间
         async function speakTime(displayTime) {
-            if (!isVoiceEnabled) return;
+            if (!isVoiceEnabled || !speechSynth) return;
             
             const now = new Date();
             const minutes = now.getMinutes();
@@ -348,7 +349,7 @@
             
             if (isVoiceEnabled) {
                 speakTime(new Date().toLocaleTimeString());
-            } else {
+            } else if (speechSynth) {
                 speechSynth.cancel();
             }
         }
@@ -364,7 +365,7 @@
             }
         }
 
-                        // 初始化
+        // 初始化
         function init() {
             // 启动时钟更新
             setInterval(updateTime, 1000);
@@ -373,22 +374,6 @@
 
             // 初始化语音系统
             initSpeechSystem();
-        }
-
-        // 等待页面加载完成后初始化
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
-        }
-    </script>
-</body>
-</html>
-
-            // 启动时钟更新
-            setInterval(updateTime, 1000);
-            updateTime();
-            loadSettings();
         }
 
         // 等待页面加载完成后初始化
