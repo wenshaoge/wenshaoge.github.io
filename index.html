@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>语音时钟</title>
+    <!-- 添加图标 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕐</text></svg>">
+    <!-- 添加主屏幕图标（iOS） -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕐</text></svg>">
+    <!-- 移动端状态栏颜色 -->
+    <meta name="theme-color" content="#4CAF50">
+    <!-- 禁用缩放 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 90%;
+        }
+        .settings {
+            margin-top: 20px;
+            padding: 10px;
+            border-top: 1px solid #eee;
+            text-align: left;
+        }
+        .time-display {
+            font-size: 2.5em;
+            margin: 20px 0;
+            font-weight: bold;
+            color: #333;
+        }
+        select, input, textarea {
+            margin: 5px;
+            padding: 5px;
+            width: 90%;
+            box-sizing: border-box;
+        }
+        .setting-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1.1em;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        small {
+            color: #666;
+            display: block;
+            margin-top: 5px;
+        }
+        @media (max-width: 768px) {
+            .container {
+                width: 95%;
+                padding: 10px;
+                margin: 10px;
+            }
+            .time-display {
+                font-size: 2em;
+            }
+            select, input, textarea {
+                font-size: 16px;
+            }
+            button {
+                padding: 15px 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>语音时钟</h1>
+        <div id="currentTime" class="time-display"></div>
+        <button onclick="toggleVoice()" id="toggleButton">开启语音</button>
+        
+        <div class="settings">
+            <div class="setting-item">
+                <label>系统语音选择：</label>
+                <select id="systemVoiceSelect" onchange="updateSettings()">
+                    <!-- 可用的系统语音会在这里显示 -->
+                </select>
+                <small>建议选择中文语音以获得最佳效果</small>
+            </div>
+
+            <div class="setting-item">
+                <label>播报频率：</label>
+                <select id="reportInterval" onchange="updateSettings()">
+                    <option value="0">每分钟</option>
+                    <option value="2">每2分钟</option>
+                    <option value="3">每3分钟</option>
+                    <option value="15">每15分钟</option>
+                    <option value="30">每30分钟</option>
+                    <option value="60">每小时</option>
+                </select>
+            </div>
+
+            <div class="setting-item">
+                <label>语速：</label>
+                <input type="range" min="0.5" max="2" step="0.1" value="1" id="speechRate" onchange="updateSettings()">
+                <span id="rateValue">1.0</span>
+            </div>
+
+            <div class="setting-item">
+                <label>音量：</label>
+                <input type="range" min="0" max="1" step="0.1" value="1" id="speechVolume" onchange="updateSettings()">
+                <span id="volumeValue">1.0</span>
+            </div>
+
+            <div class="setting-item">
+                <label>普通播报文本：</label>
+                <textarea id="normalTemplate" rows="2" onchange="updateSettings()">现在时间是{time}</textarea>
+            </div>
+
+            <div class="setting-item">
+                <label>整点播报文本：</label>
+                <textarea id="hourlyTemplate" rows="2" onchange="updateSettings()">现在是{time}整</textarea>
+            </div>
+        </div>
+    </div>
+        <script>
+        let isVoiceEnabled = false;
+        let speechSynth = window.speechSynthesis;
+        let lastSpokenTime = '';
+        let settings = {
+            interval: 0,
+            rate: 1.0,
+            volume: 1.0,
+            normalTemplate: '现在时间是{time}',
+            hourlyTemplate: '现在是{time}整',
+            voiceURI: ''
+        };
+
+        // 数字转中文
+        function numberToChinese(num) {
+            const numbers = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+            if (num <= 10) return numbers[num];
+            if (num < 20) return '十' + (num > 10 ? numbers[num - 10] : '');
+            return numbers[Math.floor(num/10)] + '十' + (num % 10 ? numbers[num % 10] : '');
+        }
+
+        // 格式化时间为中文
+        function formatTimeForSpeech(date) {
+            let hours = date.getHours();
+            const minutes = date.getMinutes();
+            
+            // 将24小时制转换为12小时制
+            if (hours > 12) {
+                hours = hours - 12;
+            }
+            // 处理0点的情况
+            if (hours === 0) {
+                hours = 12;
+            }
+            
+            let result = numberToChinese(hours) + '点';
+            if (minutes > 0) {
+                result += numberToChinese(minutes) + '分';
+            }
+            return result;
+        }
+
+        // 更新系统语音列表
+        function updateVoiceList() {
+            let voices = speechSynth.getVoices();
+            let voiceSelect = document.getElementById('systemVoiceSelect');
+            voiceSelect.innerHTML = '';
+            
+            voices.forEach(voice => {
+                let option = document.createElement('option');
+                option.value = voice.voiceURI;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                if (voice.lang.includes('zh')) {
+                    option.textContent += ' - 中文';
+                }
+                voiceSelect.appendChild(option);
+            });
+
+            // 选择之前保存的语音或默认中文语音
+            if (settings.voiceURI) {
+                voiceSelect.value = settings.voiceURI;
+            } else {
+                // 默认选择中文语音
+                let chineseVoice = voices.find(voice => voice.lang.includes('zh'));
+                if (chineseVoice) {
+                    voiceSelect.value = chineseVoice.voiceURI;
+                    settings.voiceURI = chineseVoice.voiceURI;
+                }
+            }
+        }
+
+        // 获取中文语音
+        function getChineseVoice() {
+            let voices = speechSynth.getVoices();
+            if (settings.voiceURI) {
+                let selectedVoice = voices.find(voice => voice.voiceURI === settings.voiceURI);
+                if (selectedVoice) return selectedVoice;
+            }
+            return voices.find(voice => voice.lang.includes('zh')) || voices[0];
+        }
+                  // 加载设置
+        function loadSettings() {
+            const savedSettings = localStorage.getItem('voiceClockSettings');
+            if (savedSettings) {
+                settings = JSON.parse(savedSettings);
+                document.getElementById('reportInterval').value = settings.interval;
+                document.getElementById('speechRate').value = settings.rate;
+                document.getElementById('speechVolume').value = settings.volume;
+                document.getElementById('normalTemplate').value = settings.normalTemplate;
+                document.getElementById('hourlyTemplate').value = settings.hourlyTemplate;
+                
+                document.getElementById('rateValue').textContent = settings.rate.toFixed(1);
+                document.getElementById('volumeValue').textContent = settings.volume.toFixed(1);
+            }
+        }
+
+        // 更新设置
+        function updateSettings() {
+            settings.interval = parseInt(document.getElementById('reportInterval').value);
+            settings.rate = parseFloat(document.getElementById('speechRate').value);
+            settings.volume = parseFloat(document.getElementById('speechVolume').value);
+            settings.normalTemplate = document.getElementById('normalTemplate').value;
+            settings.hourlyTemplate = document.getElementById('hourlyTemplate').value;
+            settings.voiceURI = document.getElementById('systemVoiceSelect').value;
+            
+            document.getElementById('rateValue').textContent = settings.rate.toFixed(1);
+            document.getElementById('volumeValue').textContent = settings.volume.toFixed(1);
+            
+            localStorage.setItem('voiceClockSettings', JSON.stringify(settings));
+        }
+
+        // 播报时间
+        async function speakTime(displayTime) {
+            if (!isVoiceEnabled) return;
+            
+            const now = new Date();
+            const minutes = now.getMinutes();
+            
+            if (settings.interval > 0 && minutes % settings.interval !== 0) return;
+            
+            const timeForSpeech = formatTimeForSpeech(now);
+            if (timeForSpeech === lastSpokenTime) return;
+            
+            let utterance = new SpeechSynthesisUtterance();
+            const template = minutes === 0 ? settings.hourlyTemplate : settings.normalTemplate;
+            utterance.text = template.replace('{time}', timeForSpeech);
+            
+            let voices = speechSynth.getVoices();
+            let selectedVoice = voices.find(voice => voice.voiceURI === settings.voiceURI);
+            utterance.voice = selectedVoice || getChineseVoice();
+            utterance.rate = settings.rate;
+            utterance.volume = settings.volume;
+            
+            speechSynth.speak(utterance);
+            lastSpokenTime = timeForSpeech;
+        }
+
+        // 切换语音开关
+        function toggleVoice() {
+            isVoiceEnabled = !isVoiceEnabled;
+            document.getElementById('toggleButton').textContent = 
+                isVoiceEnabled ? '关闭语音' : '开启语音';
+            
+            if (isVoiceEnabled) {
+                speakTime(new Date().toLocaleTimeString());
+            } else {
+                speechSynth.cancel();
+            }
+        }
+
+        // 更新时间显示
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            document.getElementById('currentTime').textContent = timeString;
+            
+            if (now.getSeconds() === 0) {
+                speakTime(timeString);
+            }
+        }
+
+        // 初始化
+        speechSynth.addEventListener('voiceschanged', () => {
+            updateVoiceList();
+        });
+
+        setInterval(updateTime, 1000);
+        updateTime();
+        loadSettings();
+    </script>
+</body>
+</html>
