@@ -147,7 +147,7 @@
         </div>
     </div>
         <script>
-        // 添加调试信息
+                // 添加调试信息
         window.onerror = function(msg, url, lineNo, columnNo, error) {
             const debug = document.getElementById('debug');
             debug.textContent = 'Error: ' + msg + '\nLine: ' + lineNo;
@@ -155,8 +155,41 @@
         };
 
         let isVoiceEnabled = false;
-        let speechSynth = window.speechSynthesis;
+        let speechSynth = null;
         let lastSpokenTime = '';
+
+        // 检查浏览器支持
+        function checkBrowserSupport() {
+            try {
+                speechSynth = window.speechSynthesis;
+                let utterance = new SpeechSynthesisUtterance('测试');
+                return true;
+            } catch (error) {
+                document.getElementById('debug').textContent = '当前浏览器可能不支持语音功能，请尝试使用 Chrome 浏览器';
+                return false;
+            }
+        }
+
+        // 初始化语音系统
+        function initSpeechSystem() {
+            if (!checkBrowserSupport()) {
+                document.getElementById('systemVoiceSelect').innerHTML = '<option value="">浏览器不支持语音功能</option>';
+                document.getElementById('toggleButton').disabled = true;
+                document.getElementById('toggleButton').textContent = '语音不可用';
+                return;
+            }
+
+            // 尝试加载语音列表
+            setTimeout(function tryLoadVoices() {
+                const voices = speechSynth.getVoices();
+                if (voices.length > 0) {
+                    updateVoiceList();
+                    document.getElementById('debug').textContent = '语音系统就绪';
+                } else {
+                    setTimeout(tryLoadVoices, 100);
+                }
+            }, 100);
+        }
         let settings = {
             interval: 0,
             rate: 1.0,
@@ -331,24 +364,26 @@
             }
         }
 
-                // 初始化
+                        // 初始化
         function init() {
-            // 确保语音系统已经准备好
-            if (typeof speechSynthesis !== 'undefined') {
-                speechSynth = window.speechSynthesis;
-                
-                // 监听语音列表加载
-                speechSynth.addEventListener('voiceschanged', function() {
-                    updateVoiceList();
-                });
+            // 启动时钟更新
+            setInterval(updateTime, 1000);
+            updateTime();
+            loadSettings();
 
-                // 如果语音列表已经加载，直接更新
-                if (speechSynth.getVoices().length > 0) {
-                    updateVoiceList();
-                }
-            } else {
-                document.getElementById('debug').textContent = '浏览器不支持语音合成';
-            }
+            // 初始化语音系统
+            initSpeechSystem();
+        }
+
+        // 等待页面加载完成后初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>
 
             // 启动时钟更新
             setInterval(updateTime, 1000);
