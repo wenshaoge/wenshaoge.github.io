@@ -331,18 +331,37 @@
             }
         }
 
-        // 初始化
-        if (speechSynth.getVoices().length === 0) {
-            speechSynth.addEventListener('voiceschanged', function() {
-                updateVoiceList();
-            });
-        } else {
-            updateVoiceList();
+                // 初始化
+        function init() {
+            // 确保语音系统已经准备好
+            if (typeof speechSynthesis !== 'undefined') {
+                speechSynth = window.speechSynthesis;
+                
+                // 监听语音列表加载
+                speechSynth.addEventListener('voiceschanged', function() {
+                    updateVoiceList();
+                });
+
+                // 如果语音列表已经加载，直接更新
+                if (speechSynth.getVoices().length > 0) {
+                    updateVoiceList();
+                }
+            } else {
+                document.getElementById('debug').textContent = '浏览器不支持语音合成';
+            }
+
+            // 启动时钟更新
+            setInterval(updateTime, 1000);
+            updateTime();
+            loadSettings();
         }
 
-        setInterval(updateTime, 1000);
-        updateTime();
-        loadSettings();
+        // 等待页面加载完成后初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>
